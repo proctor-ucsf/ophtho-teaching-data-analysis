@@ -1,0 +1,26 @@
+
+mutt1.csv
+
+Codebook
+
+This file includes data from 292 patients enrolled in the The Mycotic Ulcer Treatment Trial (MUTT) I
+
+Prajna, N. V., Krishnan, T., Mascarenhas, J., Rajaraman, R., Prajna, L., Srinivasan, M., Raghavan, A., Oldenburg, C. E., Ray, K. J., Zegans, M. E., McLeod, S. D., Porco, T. C., Acharya, N. R., Lietman, T. M. & Mycotic Ulcer Treatment Trial Group. The mycotic ulcer treatment trial: a randomized trial comparing natamycin vs voriconazole. JAMA Ophthalmol. 131, 422–429 (2013).
+
+https://pubmed.ncbi.nlm.nih.gov/23710492/
+
+Updated October 19, 2021
+Ben Arnold (ben.arnold@ucsf.edu)
+Note that as of Oct 19, 2021, the 8 individuals who are flagged as "out of window" and to be excluded from the primary analysis are not necessarily the same participants who were actually excluded in the original publication. The analysis results will match exactly.  Also note that the participant ID variable is not the internal ID variable used in the original study — data have been further anonymized to protect confidentiality.
+
+
+The file includes 323 records and 5 variables. 
+
+Each record corresponds to a patient enrolled in the MUTT I trial. 
+
+Among the 323 individuals, there were
+
+ $ pid        : Patient ID $ tr         : Assigned treatment (Voriconazole, Natamycin) $ logmar_0   : BSCVA measured at baseline (in logMAR)  $ logmar_3   : BSCVA measured at 3 months (in logMAR) $ outofwindow: a binary indicator for whether or not the month 3 BSCVA measurement was "out of window". Those with outofwindow==1 should be excluded from the primary analysis.
+
+str(d)
+ $ pid        : num [1:323] 1 2 3 4 5 6 7 8 9 10 ... $ tr         : Factor w/ 2 levels "Voriconazole",..: 1 2 2 1 2 1 2 2 2 1 ... $ logmar_0   : num [1:323] 0.6 0.22 0.9 0.56 0.76 ... $ logmar_3   : num [1:323] 0.26 0.48 0.7 0 0.4 ... $ outofwindow: num [1:323] 0 0 0 0 0 0 0 NA 0 0 ...
