@@ -32,6 +32,7 @@ Clear the workspace and load all packages and color palettes used below.
 rm(list=ls())
 
 # load packages
+library(here)
 library(tidyverse)
 library(broom)
 library(epitools)
@@ -66,7 +67,7 @@ The de-identified BSCVA data are stored in the GitHub repository under `/data`
 # as a factor, with 
 # Voriconazole as the reference level
 #-----------------------------
-d <- read_csv("~/ophtho-teaching-data-analysis/data/mutt1.csv") %>%
+d <- read_csv(here("data","mutt1.csv")) %>%
   mutate(tr = factor(tr, levels = c("Voriconazole","Natamycin")))
 
 #-----------------------------
@@ -103,7 +104,7 @@ plot_bscva_baseline <- ggplot(data = dl %>% filter(time=="Baseline"), aes(logmar
   )
 plot_bscva_baseline
 
-# ggsave("~/ophtho-teaching-data-analysis/output/mutt-bscva-baseline.png",plot_bscva_baseline, device = "png", width = 5, height = 3)
+# ggsave(here("output","mutt-bscva-baseline.png"),plot_bscva_baseline, device = "png", width = 5, height = 3)
   
 ```
 
@@ -126,7 +127,7 @@ plot_bscva_all <- ggplot(data = dl, aes(logmar,color=tr)) +
   theme_minimal()
 plot_bscva_all
 
-# ggsave("~/ophtho-teaching-data-analysis/output/mutt-bscva-baseline-3mos.png",plot_bscva_all, device = "png", width = 8, height = 3)
+# ggsave(here("output","mutt-bscva-baseline.png"),plot_bscva_all, device = "png", width = 8, height = 3)
   
 ```
 
