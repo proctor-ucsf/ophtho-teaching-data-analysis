@@ -1,0 +1,296 @@
+---
+title: Data analysis examples
+subtitle: UCSF Ophthalmology Residents
+date: "Run: `r Sys.time()`"
+author: Ben Arnold (ben.arnold@ucsf.edu)
+output:
+  html_document:
+    highlight: default
+    theme: default
+    code_folding: show
+    df_print: paged
+    toc: yes
+    toc_depth: '3'
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+---
+
+# Summary
+
+This notebook includes some analysis examples that follow an ophthalmology resident introductory lecture on data analysis.
+
+# Preamble
+
+Clear the workspace and load all packages and color palettes used below.
+
+```{r preamble, message = FALSE}
+#-----------------------------
+# preamble
+#-----------------------------
+# clear memory
+rm(list=ls())
+
+# load packages
+library(tidyverse)
+library(broom)
+library(epitools)
+library(sandwich)
+library(lmtest)
+library(kableExtra)
+  options(knitr.table.format = "html")
+
+# safe color blind palette
+# http://jfly.iam.u-tokyo.ac.jp/color/
+# http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/
+cbpal <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+```
+
+
+# Prajna 2013
+
+This analysis example uses primary outcome data from the MUTT study:
+
+Prajna, N. V., Krishnan, T., Mascarenhas, J., Rajaraman, R., Prajna, L., Srinivasan, M., Raghavan, A., Oldenburg, C. E., Ray, K. J., Zegans, M. E., McLeod, S. D., Porco, T. C., Acharya, N. R., Lietman, T. M. & Mycotic Ulcer Treatment Trial Group. The mycotic ulcer treatment trial: a randomized trial comparing natamycin vs voriconazole. JAMA Ophthalmol. 131, 422–429 (2013).
+https://pubmed.ncbi.nlm.nih.gov/23710492/
+
+## Load the MUTT data
+
+The de-identified BSCVA data are stored in the GitHub repository under `/data`
+
+```{r load data, message=FALSE}
+#-----------------------------
+# read-in the MUTT I data
+# format the tr variable
+# as a factor, with 
+# Voriconazole as the reference level
+#-----------------------------
+d <- read_csv("~/ophtho-teaching-data-analysis/data/mutt1.csv") %>%
+  mutate(tr = factor(tr, levels = c("Voriconazole","Natamycin")))
+
+#-----------------------------
+# pivot the data into long format
+# to make it easy to plot 
+# the data in a single panel
+#-----------------------------
+dl <- d %>%
+  pivot_longer(cols = c("logmar_0","logmar_3"), 
+               names_to = "meas", names_prefix = "logmar_", 
+               values_to = "logmar") %>%
+  mutate(time = ifelse(meas == 0, "Baseline", "3 months"), 
+         time = factor(time, levels = c("Baseline","3 months")))
+  
+```
+
+## Distributions of BSCVA
+
+Plot the distribution of BSCVA at enrollment.  The distributions look very similar, balanced by randomization.
+
+```{r BSCVA distributions baseline only,warning=FALSE}
+
+# make a figure at both time points
+pcols <- c("black",cbpal[c(8,4)])
+plot_bscva_baseline <- ggplot(data = dl %>% filter(time=="Baseline"), aes(logmar,color=tr)) +
+  geom_density() +
+  # add rug plot below, with separate lines for each measure
+  geom_point(data=filter(dl,time=="Baseline"),aes(x=logmar,y=-0.01),size=1,alpha=0.1) +
+  labs(x="logMAR",title="Distribution of BSCVA at baseline in MUTT") +
+  scale_color_manual(values=pcols,guide_colorbar(title="Group")) +
+  theme_minimal() +
+  theme(
+    legend.position = c(0.8,0.8)
+  )
+plot_bscva_baseline
+
+# ggsave("~/ophtho-teaching-data-analysis/output/mutt-bscva-baseline.png",plot_bscva_baseline, device = "png", width = 5, height = 3)
+  
+```
+
+Plot distributions of BSCVA measured in MUTT at enrollment and 3-months.
+
+Patients who received Natamycin appear to have better vision at 3 months (lower logMAR). We can use statistical tests (next section) to formally test if the two groups differ.
+
+```{r BSCVA distributions,warning=FALSE}
+
+# make a figure at both time points
+pcols <- c("black",cbpal[c(8,4)])
+plot_bscva_all <- ggplot(data = dl, aes(logmar,color=tr)) +
+  facet_grid(.~time) +
+  geom_density() +
+  # add rug plot below, with separate lines for each measure
+  geom_point(data=filter(dl,time=="Baseline"),aes(x=logmar,y=-0.01),size=1,alpha=0.1) +
+  geom_point(data=filter(dl,time=="3 months"),aes(x=logmar,y=-0.02),size=1,alpha=0.1) +
+  labs(x="logMAR",title="Distribution of BSCVA in all MUTT participants (n=323)") +
+  scale_color_manual(values=pcols,guide_colorbar(title="Group")) +
+  theme_minimal()
+plot_bscva_all
+
+# ggsave("~/ophtho-teaching-data-analysis/output/mutt-bscva-baseline-3mos.png",plot_bscva_all, device = "png", width = 8, height = 3)
+  
+```
+
+## Statistical Testing
+
+### T-test
+
+A simple comparison of two quantitative variables is a T-test. The results of the test suggest that logMAR is lower in the Natamycin group.
+
+```{r ttest at 3 months}
+t.test(logmar_3 ~ tr, data=d)
+
+```
+
+### Wilcoxon Rank-Sum test
+
+The logMAR distributions at 3 months are not normally distributed.  The Wilcoxon Rank-Sum tests (also called the Mann-Whitney U test) is a non-parametric alternative that does not assume normality. 
+
+```{r wilcoxon test at 3 months}
+wilcox.test(logmar_3 ~ tr, data=d)
+
+```
+
+## Regression 
+
+### Unadjusted regression
+```{r unadjusted regression}
+fit <- lm(logmar_3 ~ tr, data=d)
+summary(fit)
+knitr::kable(tidy(fit, conf.int = TRUE), digits = 2) %>%
+  kable_styling(bootstrap_options = "striped")
+```
+
+In this unadjusted model, the interpretation of the intercept is the 3 month mean BSCVA in the Voriconazole group, and the `trNatamycin` estimate is the difference in logMAR (Natamycin - Voriconazole). 
+
+### Adjusted for baseline BSCVA
+```{r adjusted regression}
+fit2 <- lm(logmar_3 ~ logmar_0 + tr, data=d)
+summary(fit2)
+knitr::kable(tidy(fit2, conf.int = TRUE), digits = 2) %>%
+  kable_styling(bootstrap_options = "striped")
+```
+
+In the model that adjusts for each patient's baseline logMAR, the intercept value is no longer easy to interpret (technically it is the logMAR amon Voriconazole patients with baseline logMAR = 0). The interpretation of the `logmar_0` coefficient is the increase in logMAR at 3 months associated with an increase of 1 in logMAR at baseline.  
+
+Our main focus remains on the `trNatamycin` estimate, which is the difference in logMAR between groups (Natamycin - Voriconazole), adjusting for baseline logMAR.
+
+It is very similar to the unadjusted analysis, but is slightly more precise (smaller SE, narrower 95% CI).  Compare this value to that reported in Table 5 of Prajna et al (2013). 
+
+
+# Weiss 2015
+
+This analysis follows the paper:
+
+Weiss, D. M., Casten, R. J., Leiby, B. E., Hark, L. A., Murchison, A. P., Johnson, D., Stratford, S., Henderer, J., Rovner, B. W. & Haller, J. A. Effect of Behavioral Intervention on Dilated Fundus Examination Rates in Older African American Individuals With Diabetes Mellitus: A Randomized Clinical Trial. JAMA Ophthalmol. 133, 1005–1012 (2015).
+https://pubmed.ncbi.nlm.nih.gov/26068230/ 
+
+## Make the dataset
+
+Since the original paper reports the patient numbers and outcome frequencies in each arm, we can re-create the dataset with a few lines of code.
+
+```{r make weiss 2015 data}
+
+#-------------------------------
+# create the dataset from
+# results reported in Table 2
+#-------------------------------
+dfe1 <- c(rep(1,80),rep(0,11))
+dfe0 <- c(rep(1,30),rep(0,58))
+tr <- c(rep("BADRP",91), rep("ST",88))
+dweiss <- data.frame(tr = tr, dfe = c(dfe1,dfe0)) %>%
+  mutate(pid = row_number(),
+         tr = factor(tr, levels = c("ST","BADRP"))) %>%
+  select(pid,tr,dfe)
+```
+
+## Estimate the risk ratio (RR)
+
+Here, we use the `epitab` package to estimate different measures of effect for binary outcomes.  
+
+The risk ratio is simply the proportion of patients who had dilated fundus examinations (DFEs) in the two groups: $RR = p_1 / p_0$ 
+
+```{r weiss risk ratio}
+options(knitr.kable.NA = '')
+
+rr_est <- epitab(x=dweiss$tr, y = dweiss$dfe, method = "riskratio")
+
+knitr::kable(rr_est$tab, digits = 2) %>%
+  kable_styling(bootstrap_options = "striped")
+
+```
+
+## Estimate the odds ratio (OR)
+
+Sometimes, studies will compare groups based on binary outcomes using the odds ratio (OR). The odds of an outcome is the probability that it will happen divided by the probability it will not happen: $p/(1-p)$, and so the OR between two groups is: $OR = \frac{p_1 / (1-p1)}{p_0 / (1-p_0)}$.  
+
+The OR will always be further from the null (1.0) compared to the RR.  For rare outcomes, they are very close, but for outcomes with high prevalence (e.g., >25%) the two measures will be _very_ different. In this example, the OR is:
+
+```{r weiss odds ratio}
+
+or_est <- epitab(x=dweiss$tr, y = dweiss$dfe, method = "oddsratio")
+
+knitr::kable(or_est$tab, digits = 2) %>%
+  kable_styling(bootstrap_options = "striped")
+
+```
+
+_Much_ larger than the RR.  Both are technically correct, but in this case with a very common outcome the RR is arguably easier to interpret.
+
+Why to people estimate the OR if it can be hard to interpret?  One reason is that it is easy to estimate ORs using logistic regression (next section). 
+
+## Estimate the OR with regression
+
+The logit link is the natural link for the binomial family in generalized linear models (GLMs), and so logistic regression models are a very common analysis technique for binary outcomes.  To fit a logistic model in R, you can use the `glm` package. Here is an example using the Weiss et al. (2015) study:
+
+```{r weiss glm or}
+
+or_fit <- glm(dfe ~ tr, data= dweiss, family = binomial(link = "logit"))
+knitr::kable(tidy(or_fit,conf.int = TRUE, exponentiate = TRUE), digits = 2) %>%
+  kable_styling(bootstrap_options = "striped")
+
+```
+
+The estimated OR matches the value exactly from the `epitools` package (which essentially estimates it without a model).
+
+
+## Estimate the RR with regression
+
+It turns out that you can also estimate the RR using regression by changing the link function in a GLM to a log link from a logit link in a binomial model. This paper provides the details:
+
+McNutt, L.-A., Wu, C., Xue, X. & Hafner, J. P. Estimating the relative risk in cohort studies and clinical trials of common outcomes. Am. J. Epidemiol. 157, 940–943 (2003). https://pubmed.ncbi.nlm.nih.gov/12746247/
+
+As per above, estimating the RR can sometimes be advantageous to improve the interpretatbility of the effect estimate.
+
+The problem is that sometimes log-binomial models fail to converge, and that will be the case for this example!  When that happens, a valid alternative is to use what is called a "modified Poisson" regression approach. In this case, we specify a GLM with a Poisson outcome distribution and a log link. However, since we know that there is some model-misspecification (the model assumes the outcome is Poisson but we know it is Binomial) we need to use robust standard errors to get correct SEs and 95% confidence intervals.  This paper provides the details:
+
+Zou, G. A modified poisson regression approach to prospective studies with binary data. Am. J. Epidemiol. 159, 702–706 (2004). https://pubmed.ncbi.nlm.nih.gov/15033648/ 
+
+You can estimate robust SEs in R using the `sandwich` and `lmtest` packages.  This code chunk provides an example:
+
+```{r weiss glm rr}
+
+# log-binomial regression does not converge
+# rr_fit <- glm(dfe ~ tr, data= dweiss, family = binomial(link = "log"))
+
+# so use modified poisson with robust SEs
+rr_fit <- glm(dfe ~ tr, data= dweiss, family = poisson(link = "log"))
+rr_fit_robust <- coeftest(rr_fit, vcov = vcovHC(rr_fit))
+
+rr_fit_tab <- as.data.frame(rr_fit_robust[,1:4]) %>%
+  mutate(lab = c("Intercept","BADRP")) %>%
+  mutate(RR = exp(Estimate),
+         RRlb = exp(Estimate - 1.96*`Std. Error`), 
+         RRub = exp(Estimate + 1.96*`Std. Error`)
+         ) %>%
+  filter(lab == "BADRP") %>%
+  select(lab, RR, RRlb, RRub, `z value`, `Pr(>|z|)`)
+
+knitr::kable(rr_fit_tab, digits = 2) %>%
+  kable_styling(bootstrap_options = "striped")
+
+```
+
+# Session Info
+```{r session info}
+sessionInfo()
+```
